@@ -22,24 +22,39 @@
         h1 { margin-bottom: 5px; font-weight: 800; letter-spacing: -0.5px; }
         .subtitle { color: #7f8c8d; margin-bottom: 40px; }
         
-        /* Sleeker, more modern tracking button */
+        /* Dynamic Action Button */
         .log-btn {
             width: 180px;
             height: 180px;
             border-radius: 50%;
             border: 4px solid #fff;
-            background: linear-gradient(135deg, #ff6b6b, #ff4757);
             color: white;
             font-size: 1.6rem;
             font-weight: bold;
-            box-shadow: 0 15px 30px rgba(255, 71, 87, 0.3);
             cursor: pointer;
-            transition: transform 0.1s, box-shadow 0.1s;
+            transition: transform 0.1s, box-shadow 0.1s, background 0.3s;
             -webkit-tap-highlight-color: transparent;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .log-btn.start-state {
+            background: linear-gradient(135deg, #ff6b6b, #ff4757);
+            box-shadow: 0 15px 30px rgba(255, 71, 87, 0.3);
+        }
+        .log-btn.stop-state {
+            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            box-shadow: 0 15px 30px rgba(44, 62, 80, 0.3);
         }
         .log-btn:active {
             transform: scale(0.96);
-            box-shadow: 0 5px 15px rgba(255, 71, 87, 0.3);
+        }
+        .timer-text {
+            font-size: 0.9rem;
+            font-weight: 400;
+            opacity: 0.9;
         }
         
         .counter-banner {
@@ -73,7 +88,7 @@
             background: #fff;
             border-radius: 16px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-            max-height: 250px;
+            max-height: 350px;
             overflow-y: auto;
         }
         .log-item {
@@ -85,16 +100,21 @@
             font-size: 0.95rem;
         }
         .log-item:last-child { border-bottom: none; }
+        .log-details { display: flex; flex-direction: column; gap: 2px; }
         .log-time { font-weight: 600; color: #2c3e50; }
-        .log-date { color: #95a5a6; font-size: 0.85rem; }
+        .log-duration { font-size: 0.8rem; color: #ff4757; font-weight: 600; }
+        .log-date { color: #7f8c8d; font-size: 0.9rem; font-weight: 600; text-align: right; }
     </style>
 </head>
 <body>
 
     <h1>Hotflash</h1>
-    <p class="subtitle">Tap to log instantly</p>
+    <p class="subtitle" id="statusMessage">Tap to start tracking</p>
 
-    <button class="log-btn" id="flashBtn">🔥 LOG</button>
+    <button class="log-btn start-state" id="flashBtn">
+        <span id="btnAction">🔥 START</span>
+        <span class="timer-text" id="btnTimer" style="display: none;">00:00</span>
+    </button>
 
     <div class="counter-banner">
         Today: <span id="count">0</span>
@@ -107,51 +127,112 @@
 
     <script>
         const btn = document.getElementById('flashBtn');
+        const btnAction = document.getElementById('btnAction');
+        const btnTimer = document.getElementById('btnTimer');
+        const statusMessage = document.getElementById('statusMessage');
         const countDisplay = document.getElementById('count');
         const logListDisplay = document.getElementById('logList');
 
+        let timerInterval = null;
+
+        function formatDuration(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            if (minutes > 0) {
+                return `${minutes}m ${seconds}s`;
+            }
+            return `${seconds}s`;
+        }
+
         function updateDisplay() {
             const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
+            const activeStart = localStorage.getItem('hotflash_active_start');
             
-            // 1. Update Today's Count
+            // 1. Update Today's Count (Only counting completed flashes)
             const todayStr = new Date().toDateString();
-            const todayLogs = logs.filter(timestamp => new Date(timestamp).toDateString() === todayStr);
+            const todayLogs = logs.filter(log => new Date(log.start).toDateString() === todayStr);
             countDisplay.textContent = todayLogs.length;
 
-            // 2. Render History List (showing newest first)
+            // 2. Handle Button UI State based on whether a flash is currently active
+            if (activeStart) {
+                btn.className = "log-btn stop-state";
+                btnAction.textContent = "🛑 STOP";
+                btnTimer.style.display = "inline";
+                statusMessage.textContent = "Hotflash in progress...";
+                
+                // Start the live running timer button text
+                clearInterval(timerInterval);
+                const updateTimerText = () => {
+                    const elapsed = Date.now() - new Date(activeStart).getTime();
+                    const secs = Math.floor(elapsed / 1000) % 60;
+                    const mins = Math.floor(elapsed / 60000);
+                    btnTimer.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                };
+                updateTimerText();
+                timerInterval = setInterval(updateTimerText, 1000);
+            } else {
+                clearInterval(timerInterval);
+                btn.className = "log-btn start-state";
+                btnAction.textContent = "🔥 START";
+                btnTimer.style.display = "none";
+                statusMessage.textContent = "Tap to start tracking";
+            }
+
+            // 3. Render History List
             logListDisplay.innerHTML = '';
-            const recentLogs = [...logs].reverse(); // Copy and reverse to show latest at top
+            const recentLogs = [...logs].reverse();
             
             if (recentLogs.length === 0) {
                 logListDisplay.innerHTML = '<li class="log-item" style="color: #95a5a6; justify-content: center;">No logs yet</li>';
                 return;
             }
 
-            recentLogs.forEach(timestamp => {
-                const dateObj = new Date(timestamp);
+            recentLogs.forEach(log => {
+                const startDate = new Date(log.start);
+                const endDate = new Date(log.end);
                 
-                // Format Time (e.g., 4:15 PM)
-                const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                // Format Date (e.g., Jul 11)
-                const dateStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                // Format Start & End Time (e.g., 4:15 PM - 4:18 PM)
+                const startTimeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const endTimeStr = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                // Format Date to show Day of week, Month, and Date (e.g., "Sat, Jul 11")
+                const dateStr = startDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+                
+                const durationMs = endDate.getTime() - startDate.getTime();
 
                 const li = document.createElement('li');
                 li.className = 'log-item';
                 li.innerHTML = `
-                    <span class="log-time">🔥 ${timeStr}</span>
+                    <div class="log-details">
+                        <span class="log-time">🔥 ${startTimeStr} – ${endTimeStr}</span>
+                        <span class="log-duration">Duration: ${formatDuration(durationMs)}</span>
+                    </div>
                     <span class="log-date">${dateStr}</span>
                 `;
                 logListDisplay.appendChild(li);
             });
         }
 
-        // Log a new hot flash with immediate visual feedback
+        // Toggle tracking state on click
         btn.addEventListener('click', () => {
-            const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
-            logs.push(new Date().toISOString());
-            localStorage.setItem('hotflash_logs', JSON.stringify(logs));
+            const activeStart = localStorage.getItem('hotflash_active_start');
             
             if (navigator.vibrate) navigator.vibrate(100);
+
+            if (!activeStart) {
+                // Start a new flash
+                localStorage.setItem('hotflash_active_start', new Date().toISOString());
+            } else {
+                // Stop and save the completed flash
+                const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
+                logs.push({
+                    start: activeStart,
+                    end: new Date().toISOString()
+                });
+                localStorage.setItem('hotflash_logs', JSON.stringify(logs));
+                localStorage.removeItem('hotflash_active_start');
+            }
             
             updateDisplay();
         });
