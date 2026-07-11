@@ -1,7 +1,8 @@
 const CACHE_NAME = 'hotflash-v2';
 const ASSETS = [
   'index.html',
-  'manifest.json'
+  'manifest.json',
+  'Hotflash_Icon.png'
 ];
 
 self.addEventListener('install', (e) => {
