@@ -100,10 +100,26 @@
             font-size: 0.95rem;
         }
         .log-item:last-child { border-bottom: none; }
-        .log-details { display: flex; flex-direction: column; gap: 2px; }
+        .log-left { display: flex; flex-direction: column; gap: 2px; }
+        .log-right { display: flex; align-items: center; gap: 12px; }
         .log-time { font-weight: 600; color: #2c3e50; }
         .log-duration { font-size: 0.8rem; color: #ff4757; font-weight: 600; }
         .log-date { color: #7f8c8d; font-size: 0.9rem; font-weight: 600; text-align: right; }
+        
+        /* Delete Button Style */
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #b2bec3;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: color 0.2s, background-color 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .delete-btn:hover { color: #ff4757; background-color: #ffeaa7; }
+        .delete-btn:active { transform: scale(0.9); }
     </style>
 </head>
 <body>
@@ -145,23 +161,32 @@
             return `${seconds}s`;
         }
 
+        // Global delete handler attached to index positions
+        window.deleteLog = function(index) {
+            if (confirm("Are you sure you want to delete this log?")) {
+                const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
+                logs.splice(index, 1); // Remove the specific item using its real array index
+                localStorage.setItem('hotflash_logs', JSON.stringify(logs));
+                updateDisplay();
+            }
+        };
+
         function updateDisplay() {
             const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
             const activeStart = localStorage.getItem('hotflash_active_start');
             
-            // 1. Update Today's Count (Only counting completed flashes)
+            // 1. Update Today's Count
             const todayStr = new Date().toDateString();
             const todayLogs = logs.filter(log => new Date(log.start).toDateString() === todayStr);
             countDisplay.textContent = todayLogs.length;
 
-            // 2. Handle Button UI State based on whether a flash is currently active
+            // 2. Handle Button UI State
             if (activeStart) {
                 btn.className = "log-btn stop-state";
                 btnAction.textContent = "🛑 STOP";
                 btnTimer.style.display = "inline";
                 statusMessage.textContent = "Hotflash in progress...";
                 
-                // Start the live running timer button text
                 clearInterval(timerInterval);
                 const updateTimerText = () => {
                     const elapsed = Date.now() - new Date(activeStart).getTime();
@@ -181,22 +206,22 @@
 
             // 3. Render History List
             logListDisplay.innerHTML = '';
-            const recentLogs = [...logs].reverse();
             
-            if (recentLogs.length === 0) {
+            if (logs.length === 0) {
                 logListDisplay.innerHTML = '<li class="log-item" style="color: #95a5a6; justify-content: center;">No logs yet</li>';
                 return;
             }
+
+            // Map and preserve the original array indexes while rendering in reverse order
+            const logsWithIndex = logs.map((log, originalIndex) => ({ ...log, originalIndex }));
+            const recentLogs = logsWithIndex.reverse();
 
             recentLogs.forEach(log => {
                 const startDate = new Date(log.start);
                 const endDate = new Date(log.end);
                 
-                // Format Start & End Time (e.g., 4:15 PM - 4:18 PM)
                 const startTimeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const endTimeStr = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-                // Format Date to show Day of week, Month, and Date (e.g., "Sat, Jul 11")
                 const dateStr = startDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
                 
                 const durationMs = endDate.getTime() - startDate.getTime();
@@ -204,27 +229,27 @@
                 const li = document.createElement('li');
                 li.className = 'log-item';
                 li.innerHTML = `
-                    <div class="log-details">
+                    <div class="log-left">
                         <span class="log-time">🔥 ${startTimeStr} – ${endTimeStr}</span>
                         <span class="log-duration">Duration: ${formatDuration(durationMs)}</span>
                     </div>
-                    <span class="log-date">${dateStr}</span>
+                    <div class="log-right">
+                        <span class="log-date">${dateStr}</span>
+                        <button class="delete-btn" onclick="deleteLog(${log.originalIndex})" title="Delete log">🗑️</button>
+                    </div>
                 `;
                 logListDisplay.appendChild(li);
             });
         }
 
-        // Toggle tracking state on click
         btn.addEventListener('click', () => {
             const activeStart = localStorage.getItem('hotflash_active_start');
             
             if (navigator.vibrate) navigator.vibrate(100);
 
             if (!activeStart) {
-                // Start a new flash
                 localStorage.setItem('hotflash_active_start', new Date().toISOString());
             } else {
-                // Stop and save the completed flash
                 const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
                 logs.push({
                     start: activeStart,
