@@ -9,35 +9,84 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f7f1e3;
+            background-color: #fcf8f2;
             color: #2c3e50;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-height: 100vh;
             margin: 0;
-            padding: 20px;
+            padding: 40px 20px;
             box-sizing: border-box;
+            min-height: 100vh;
         }
-        h1 { margin-bottom: 5px; }
+        h1 { margin-bottom: 5px; font-weight: 800; letter-spacing: -0.5px; }
         .subtitle { color: #7f8c8d; margin-bottom: 40px; }
+        
+        /* Sleeker, more modern tracking button */
         .log-btn {
-            width: 200px;
-            height: 200px;
+            width: 180px;
+            height: 180px;
             border-radius: 50%;
-            border: none;
-            background: radial-gradient(circle, #ff6b6b, #ff4757);
+            border: 4px solid #fff;
+            background: linear-gradient(135deg, #ff6b6b, #ff4757);
             color: white;
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: bold;
-            box-shadow: 0 10px 20px rgba(255, 71, 87, 0.4);
+            box-shadow: 0 15px 30px rgba(255, 71, 87, 0.3);
             cursor: pointer;
-            transition: transform 0.1s;
+            transition: transform 0.1s, box-shadow 0.1s;
             -webkit-tap-highlight-color: transparent;
         }
-        .log-btn:active { transform: scale(0.95); }
-        .stats { margin-top: 40px; text-align: center; font-size: 1.2rem; }
+        .log-btn:active {
+            transform: scale(0.96);
+            box-shadow: 0 5px 15px rgba(255, 71, 87, 0.3);
+        }
+        
+        .counter-banner {
+            margin-top: 30px;
+            font-size: 1.3rem;
+            font-weight: 600;
+            background-color: #fff;
+            padding: 10px 24px;
+            border-radius: 30px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+        }
+
+        /* History Section */
+        .history-container {
+            width: 100%;
+            max-width: 400px;
+            margin-top: 40px;
+        }
+        .history-title {
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #95a5a6;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        .log-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .log-item {
+            padding: 14px 20px;
+            border-bottom: 1px solid #f5f6fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+        }
+        .log-item:last-child { border-bottom: none; }
+        .log-time { font-weight: 600; color: #2c3e50; }
+        .log-date { color: #95a5a6; font-size: 0.85rem; }
     </style>
 </head>
 <body>
@@ -47,35 +96,66 @@
 
     <button class="log-btn" id="flashBtn">🔥 LOG</button>
 
-    <div class="stats">
-        Today's Count: <span id="count">0</span>
+    <div class="counter-banner">
+        Today: <span id="count">0</span>
+    </div>
+
+    <div class="history-container">
+        <div class="history-title">Recent Logs</div>
+        <ul class="log-list" id="logList"></ul>
     </div>
 
     <script>
         const btn = document.getElementById('flashBtn');
         const countDisplay = document.getElementById('count');
+        const logListDisplay = document.getElementById('logList');
 
-        // Load today's count on startup
         function updateDisplay() {
             const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
+            
+            // 1. Update Today's Count
             const todayStr = new Date().toDateString();
             const todayLogs = logs.filter(timestamp => new Date(timestamp).toDateString() === todayStr);
             countDisplay.textContent = todayLogs.length;
+
+            // 2. Render History List (showing newest first)
+            logListDisplay.innerHTML = '';
+            const recentLogs = [...logs].reverse(); // Copy and reverse to show latest at top
+            
+            if (recentLogs.length === 0) {
+                logListDisplay.innerHTML = '<li class="log-item" style="color: #95a5a6; justify-content: center;">No logs yet</li>';
+                return;
+            }
+
+            recentLogs.forEach(timestamp => {
+                const dateObj = new Date(timestamp);
+                
+                // Format Time (e.g., 4:15 PM)
+                const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                // Format Date (e.g., Jul 11)
+                const dateStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+                const li = document.createElement('li');
+                li.className = 'log-item';
+                li.innerHTML = `
+                    <span class="log-time">🔥 ${timeStr}</span>
+                    <span class="log-date">${dateStr}</span>
+                `;
+                logListDisplay.appendChild(li);
+            });
         }
 
-        // Log a new hot flash
+        // Log a new hot flash with immediate visual feedback
         btn.addEventListener('click', () => {
             const logs = JSON.parse(localStorage.getItem('hotflash_logs') || '[]');
             logs.push(new Date().toISOString());
             localStorage.setItem('hotflash_logs', JSON.stringify(logs));
             
-            // Subtle vibration feedback for mobile devices
             if (navigator.vibrate) navigator.vibrate(100);
             
             updateDisplay();
         });
 
-        // Register Service Worker for Offline PWA support
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js');
         }
